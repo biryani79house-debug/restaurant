@@ -10,13 +10,65 @@ function App() {
   const [selectedRestaurant, setSelectedRestaurant] = useState(1);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin' });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          username: loginForm.username,
+          password: loginForm.password
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setUser(data.user);
+        setIsLoggedIn(true);
+        loadData();
+      } else {
+        alert('Login failed');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+    }
+  };
+
+  const [adminData, setAdminData] = useState({ users: [], restaurants: [], analytics: {} });
+
+  const loadData = () => {
+    if (user?.role === 'admin') {
+      loadAdminData();
+    } else {
+      loadOrders();
+      loadMenu();
+    }
+  };
+
+  const loadAdminData = async () => {
+    try {
+      const [usersRes, restaurantsRes, analyticsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/users`, { headers: { 'Authorization': 'Bearer mock-token' } }),
+        fetch(`${API_BASE}/api/admin/restaurants`, { headers: { 'Authorization': 'Bearer mock-token' } }),
+        fetch(`${API_BASE}/api/admin/analytics/orders`, { headers: { 'Authorization': 'Bearer mock-token' } })
+      ]);
+      const users = await usersRes.json();
+      const restaurants = await restaurantsRes.json();
+      const analytics = await analyticsRes.json();
+      setAdminData({ users, restaurants, analytics });
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    }
+  };
 
   useEffect(() => {
-    // Mock login for demo - in production, implement proper authentication
-    setUser({ id: 1, role: 'staff', restaurant_id: 1 });
-    loadOrders();
-    loadMenu();
-  }, [selectedRestaurant]);
+    if (isLoggedIn) {
+      loadData();
+    }
+  }, [selectedRestaurant, isLoggedIn, loadData]);
 
   const loadOrders = async () => {
     setLoading(true);
@@ -88,34 +140,91 @@ function App() {
     return colors[status] || 'gray';
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="App">
+        <div className="login-container">
+          <h1>RestaurantPro Login</h1>
+          <form onSubmit={handleLogin}>
+            <div>
+              <label>Username:</label>
+              <input
+                type="text"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label>Password:</label>
+              <input
+                type="password"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                required
+              />
+            </div>
+            <button type="submit">Login</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="App">
       <header className="dashboard-header">
-        <h1>RestaurantPro - Staff Dashboard</h1>
+        <h1>RestaurantPro - {user?.role === 'admin' ? 'Admin' : 'Staff'} Dashboard</h1>
         <div className="user-info">
-          <span>Welcome, Staff Member</span>
+          <span>Welcome, {user?.full_name || user?.username}</span>
+          <button onClick={() => { setIsLoggedIn(false); setUser(null); }}>Logout</button>
         </div>
       </header>
 
       <nav className="dashboard-nav">
-        <button
-          className={activeTab === 'orders' ? 'active' : ''}
-          onClick={() => setActiveTab('orders')}
-        >
-          Orders
-        </button>
-        <button
-          className={activeTab === 'menu' ? 'active' : ''}
-          onClick={() => setActiveTab('menu')}
-        >
-          Menu Management
-        </button>
-        <button
-          className={activeTab === 'analytics' ? 'active' : ''}
-          onClick={() => setActiveTab('analytics')}
-        >
-          Analytics
-        </button>
+        {user?.role === 'admin' ? (
+          <>
+            <button
+              className={activeTab === 'users' ? 'active' : ''}
+              onClick={() => setActiveTab('users')}
+            >
+              Users
+            </button>
+            <button
+              className={activeTab === 'restaurants' ? 'active' : ''}
+              onClick={() => setActiveTab('restaurants')}
+            >
+              Restaurants
+            </button>
+            <button
+              className={activeTab === 'admin-analytics' ? 'active' : ''}
+              onClick={() => setActiveTab('admin-analytics')}
+            >
+              Analytics
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className={activeTab === 'orders' ? 'active' : ''}
+              onClick={() => setActiveTab('orders')}
+            >
+              Orders
+            </button>
+            <button
+              className={activeTab === 'menu' ? 'active' : ''}
+              onClick={() => setActiveTab('menu')}
+            >
+              Menu Management
+            </button>
+            <button
+              className={activeTab === 'analytics' ? 'active' : ''}
+              onClick={() => setActiveTab('analytics')}
+            >
+              Analytics
+            </button>
+          </>
+        )}
       </nav>
 
       <main className="dashboard-content">
@@ -221,6 +330,63 @@ function App() {
                 <p className="metric-value">
                   ${orders.reduce((sum, order) => sum + order.total_amount, 0).toFixed(2)}
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && user?.role === 'admin' && (
+          <div className="users-section">
+            <h2>User Management</h2>
+            <div className="users-list">
+              {adminData.users.map(user => (
+                <div key={user.id} className="user-card">
+                  <h3>{user.username}</h3>
+                  <p>Email: {user.email}</p>
+                  <p>Role: {user.role}</p>
+                  <p>Active: {user.is_active ? 'Yes' : 'No'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'restaurants' && user?.role === 'admin' && (
+          <div className="restaurants-section">
+            <h2>Restaurant Management</h2>
+            <div className="restaurants-list">
+              {adminData.restaurants.map(restaurant => (
+                <div key={restaurant.id} className="restaurant-card">
+                  <h3>{restaurant.name}</h3>
+                  <p>{restaurant.description}</p>
+                  <p>Address: {restaurant.address}</p>
+                  <p>Cuisine: {restaurant.cuisine_type}</p>
+                  <p>Active: {restaurant.is_active ? 'Yes' : 'No'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'admin-analytics' && user?.role === 'admin' && (
+          <div className="analytics-section">
+            <h2>System Analytics</h2>
+            <div className="analytics-grid">
+              <div className="metric-card">
+                <h3>Total Orders</h3>
+                <p className="metric-value">{adminData.analytics.total_orders || 0}</p>
+              </div>
+              <div className="metric-card">
+                <h3>Total Revenue</h3>
+                <p className="metric-value">${adminData.analytics.total_revenue || 0}</p>
+              </div>
+              <div className="metric-card">
+                <h3>Popular Restaurants</h3>
+                <ul>
+                  {adminData.analytics.popular_restaurants?.slice(0, 5).map(r => (
+                    <li key={r.name}>{r.name}: {r.orders} orders</li>
+                  )) || []}
+                </ul>
               </div>
             </div>
           </div>
