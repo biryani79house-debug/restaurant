@@ -10,6 +10,7 @@ function App() {
   const [selectedRestaurant, setSelectedRestaurant] = useState(1);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin123' });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -27,6 +28,7 @@ function App() {
       const data = await response.json();
       if (response.ok) {
         setUser(data.user);
+        setToken(data.access_token);
         setIsLoggedIn(true);
         loadData();
       } else {
@@ -51,9 +53,9 @@ function App() {
   const loadAdminData = async () => {
     try {
       const [usersRes, restaurantsRes, analyticsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/users`, { headers: { 'Authorization': 'Bearer mock-token' } }),
-        fetch(`${API_BASE}/api/admin/restaurants`, { headers: { 'Authorization': 'Bearer mock-token' } }),
-        fetch(`${API_BASE}/api/admin/analytics/orders`, { headers: { 'Authorization': 'Bearer mock-token' } })
+        fetch(`${API_BASE}/api/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/admin/restaurants`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/admin/analytics/orders`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       const users = await usersRes.json();
       const restaurants = await restaurantsRes.json();
@@ -75,7 +77,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/restaurants/${selectedRestaurant}/orders`, {
         headers: {
-          'Authorization': 'Bearer mock-token' // In production, get from auth
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await response.json();
@@ -101,7 +103,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/restaurants/${selectedRestaurant}/orders/${orderId}/status?status=${status}`, {
         method: 'PUT',
         headers: {
-          'Authorization': 'Bearer mock-token'
+          'Authorization': `Bearer ${token}`
         }
       });
       if (response.ok) {
@@ -117,7 +119,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/restaurants/${selectedRestaurant}/menu/${menuId}/availability?is_available=${!isAvailable}`, {
         method: 'PUT',
         headers: {
-          'Authorization': 'Bearer mock-token'
+          'Authorization': `Bearer ${token}`
         }
       });
       if (response.ok) {
@@ -177,7 +179,7 @@ function App() {
         <h1>RestaurantPro - {user?.role === 'admin' ? 'Admin' : 'Staff'} Dashboard</h1>
         <div className="user-info">
           <span>Welcome, {user?.full_name || user?.username}</span>
-          <button onClick={() => { setIsLoggedIn(false); setUser(null); }}>Logout</button>
+          <button onClick={() => { setIsLoggedIn(false); setUser(null); setToken(null); }}>Logout</button>
         </div>
       </header>
 
