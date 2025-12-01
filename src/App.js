@@ -30,7 +30,6 @@ function App() {
         setUser(data.user);
         setToken(data.access_token);
         setIsLoggedIn(true);
-        loadData();
       } else {
         alert('Login failed');
       }
@@ -67,10 +66,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && user) {
       loadData();
     }
-  }, [selectedRestaurant, isLoggedIn, loadData]);
+  }, [selectedRestaurant, isLoggedIn, user, loadData]);
 
   const loadOrders = async () => {
     setLoading(true);
