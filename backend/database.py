@@ -3,7 +3,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./restaurantpro.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./restaurantpro.db"
 
 engine = create_engine(
     DATABASE_URL,
