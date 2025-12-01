@@ -10,7 +10,7 @@ function App() {
   const [selectedRestaurant, setSelectedRestaurant] = useState(1);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
-  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin' });
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin123' });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const handleLogin = async (e) => {
