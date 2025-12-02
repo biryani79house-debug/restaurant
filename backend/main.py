@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine
-from models import Base
+from models import Base, User
 from routers import auth, customers, restaurants, admin, delivery, payments
 from ws_handlers import order_updates_ws, driver_tracking_ws, restaurant_ws, admin_ws
 import os
