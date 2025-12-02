@@ -9,6 +9,20 @@ import os
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Populate sample data if no users exist
+from populate_sample_data import populate_sample_data
+from sqlalchemy.orm import sessionmaker
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+db = SessionLocal()
+try:
+    if not db.query(User).first():
+        populate_sample_data()
+        print("Sample data populated on startup")
+except Exception as e:
+    print(f"Error populating data: {e}")
+finally:
+    db.close()
+
 app = FastAPI(title="RestaurantPro API", version="1.0.0")
 
 # CORS middleware for frontend integration
