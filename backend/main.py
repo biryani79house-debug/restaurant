@@ -12,9 +12,12 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="RestaurantPro API", version="1.0.0")
 
 # CORS middleware for frontend integration
+# Default to localhost for development; set CORS_ORIGINS env var in production
+default_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000")
+origins = [origin.strip() for origin in default_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -17,7 +17,7 @@ def populate_sample_data():
             email="admin@restaurantpro.com",
             username="admin",
             full_name="System Admin",
-            hashed_password=get_password_hash("admin"),
+            hashed_password=get_password_hash("admin123"),
             role="admin"
         )
         db.add(admin_user)
