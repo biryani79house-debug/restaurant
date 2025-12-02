@@ -22,6 +22,13 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+
 # Driver schemas
 class DriverBase(BaseModel):
     license_number: str
@@ -101,6 +108,18 @@ class Restaurant(RestaurantBase):
 
     class Config:
         from_attributes = True
+
+class RestaurantUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    cuisine_type: Optional[str] = None
+    operating_hours: Optional[dict] = None
+    is_active: Optional[bool] = None
 
 # Menu schemas
 class MenuBase(BaseModel):

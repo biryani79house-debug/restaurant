@@ -4,8 +4,8 @@ from sqlalchemy import func
 from typing import List
 from database import get_db
 from models import User, Restaurant, Order, Menu, OrderItem
-from schemas import User as UserSchema, Restaurant as RestaurantSchema
-from auth import get_current_active_user
+from schemas import User as UserSchema, UserCreate, UserUpdate, Restaurant as RestaurantSchema, RestaurantCreate, RestaurantUpdate
+from auth import get_current_active_user, get_password_hash
 
 router = APIRouter()
 
@@ -124,3 +124,81 @@ def activate_restaurant(
     restaurant.is_active = is_active
     db.commit()
     return {"message": f"Restaurant {'activated' if is_active else 'deactivated'}"}
+
+# CRUD for users
+@router.post("/users", response_model=UserSchema)
+def create_user(user: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_user = db.query(User).filter(
+        (User.username == user.username) | (User.email == user.email)
+    ).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username or email already registered")
+
+    hashed_password = get_password_hash(user.password)
+    db_user = User(
+        email=user.email,
+        username=user.username,
+        full_name=user.full_name,
+        phone=user.phone,
+        hashed_password=hashed_password,
+        role="staff"  # default role
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.put("/users/{user_id}", response_model=UserSchema)
+def update_user(user_id: int, user: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    for field, value in user.dict(exclude_unset=True).items():
+        setattr(db_user, field, value)
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(db_user)
+    db.commit()
+    return {"message": "User deleted"}
+
+# CRUD for restaurants
+@router.post("/restaurants", response_model=RestaurantSchema)
+def create_restaurant(restaurant: RestaurantCreate, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_restaurant = Restaurant(**restaurant.dict(), rating=0.0, is_active=True)
+    db.add(db_restaurant)
+    db.commit()
+    db.refresh(db_restaurant)
+    return db_restaurant
+
+@router.put("/restaurants/{restaurant_id}", response_model=RestaurantSchema)
+def update_restaurant(restaurant_id: int, restaurant: RestaurantUpdate, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not db_restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    for field, value in restaurant.dict(exclude_unset=True).items():
+        setattr(db_restaurant, field, value)
+
+    db.commit()
+    db.refresh(db_restaurant)
+    return db_restaurant
+
+@router.delete("/restaurants/{restaurant_id}")
+def delete_restaurant(restaurant_id: int, db: Session = Depends(get_db), current_user: User = Depends(check_admin)):
+    db_restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not db_restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    db.delete(db_restaurant)
+    db.commit()
+    return {"message": "Restaurant deleted"}
