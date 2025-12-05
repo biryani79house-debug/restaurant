@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface OrderItem {
   name: string;
@@ -22,6 +22,10 @@ interface Order {
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'active'>('all');
+  const [bellRinging, setBellRinging] = useState(false);
+  const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Mock data - in real app this would come from API
   useEffect(() => {
@@ -65,22 +69,213 @@ export default function Orders() {
       },
     ];
     setOrders(mockOrders);
+
+    // Initialize pending orders from mock data
+    const pendingIds = new Set(mockOrders.filter(o => o.status === 'pending').map(o => o.id));
+    setPendingOrderIds(pendingIds);
+    setBellRinging(pendingIds.size > 0);
   }, []);
 
-  const acceptOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId
-        ? { ...order, status: 'accepted', estimatedTime: 30 }
-        : order
-    ));
+  // Function to play bell sound using Web Audio API
+  const playBellSound = () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      const context = audioContextRef.current;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+
+      // Bell-like sound: multiple frequencies
+      const frequencies = [800, 600, 400]; // Bell harmonics
+      let currentFreqIndex = 0;
+
+      const playNextFrequency = () => {
+        if (currentFreqIndex < frequencies.length) {
+          oscillator.frequency.setValueAtTime(frequencies[currentFreqIndex], context.currentTime);
+          gainNode.gain.setValueAtTime(0.3, context.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+
+          setTimeout(() => {
+            currentFreqIndex++;
+            playNextFrequency();
+          }, 200);
+        } else {
+          oscillator.stop();
+        }
+      };
+
+      oscillator.start();
+      playNextFrequency();
+
+      // Repeat every 2 seconds while bell is ringing
+      if (bellRinging) {
+        setTimeout(() => {
+          if (bellRinging) playBellSound();
+        }, 2000);
+      }
+    } catch (error) {
+      console.log('Web Audio API not supported, using fallback beep');
+      // Fallback: simple beep sound
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmQcBzaO1fLNfCsE');
+      audio.play().catch(() => console.log('Audio play failed'));
+    }
   };
 
-  const rejectOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId
-        ? { ...order, status: 'cancelled' }
-        : order
-    ));
+  // WebSocket connection and bell handling
+  useEffect(() => {
+    // Connect to WebSocket
+    const connectWebSocket = () => {
+      const ws = new WebSocket('ws://localhost:8000/api/v1/ws/admin');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Connected to admin WebSocket');
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        console.log('Received message:', message);
+
+        if (message.type === 'new_order') {
+          // Add new order to the list
+          const newOrder: Order = {
+            id: message.data.id.toString(),
+            customerName: message.data.customer_name,
+            items: message.data.items.map((item: any) => ({
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+            })),
+            total: message.data.total_amount,
+            status: 'pending',
+            deliveryType: message.data.delivery_type,
+            createdAt: message.data.created_at,
+          };
+
+          setOrders(prev => [newOrder, ...prev]);
+
+          // Add to pending orders and start bell
+          setPendingOrderIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(newOrder.id);
+            return newSet;
+          });
+          setBellRinging(true);
+
+          // Play bell sound
+          playBellSound();
+        } else if (message.type === 'order_status_change') {
+          const { order_id, status } = message.data;
+
+          // Update order status
+          setOrders(prev => prev.map(order =>
+            order.id === order_id.toString()
+              ? { ...order, status }
+              : order
+          ));
+
+          // If order is accepted or rejected, remove from pending
+          if (status === 'accepted' || status === 'cancelled') {
+            setPendingOrderIds(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(order_id.toString());
+
+              // Stop bell if no more pending orders
+              if (newSet.size === 0) {
+                setBellRinging(false);
+              }
+
+              return newSet;
+            });
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        setTimeout(connectWebSocket, 1000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+
+
+  const acceptOrder = async (orderId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'accepted', estimated_time: 30 }),
+      });
+
+      if (response.ok) {
+        setOrders(prev => prev.map(order =>
+          order.id === orderId
+            ? { ...order, status: 'accepted', estimatedTime: 30 }
+            : order
+        ));
+
+        // Remove from pending orders
+        setPendingOrderIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to accept order:', error);
+    }
+  };
+
+  const rejectOrder = async (orderId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+
+      if (response.ok) {
+        setOrders(prev => prev.map(order =>
+          order.id === orderId
+            ? { ...order, status: 'cancelled' }
+            : order
+        ));
+
+        // Remove from pending orders
+        setPendingOrderIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to reject order:', error);
+    }
   };
 
   const markAsReady = (orderId: string) => {
@@ -121,7 +316,17 @@ export default function Orders() {
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <div className="max-w-7xl mx-auto p-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-black dark:text-zinc-50">Order Management</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold text-black dark:text-zinc-50">Order Management</h1>
+            {bellRinging && (
+              <div className="flex items-center gap-2 text-red-600 animate-pulse">
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+                </svg>
+                <span className="text-lg font-semibold">New Order!</span>
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setFilter('all')}
