@@ -9,7 +9,8 @@ import os
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.models import Base, MenuItem
+from app.core.database import Base
+from app.models import MenuItem
 
 def init_database():
     """Initialize the database with tables and sample data"""

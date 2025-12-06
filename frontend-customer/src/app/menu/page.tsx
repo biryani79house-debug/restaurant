@@ -11,7 +11,7 @@ interface MenuItem {
   available: boolean;
 }
 
-const API_BASE_URL = 'http://localhost:8000/api/v1'; // Backend API URL
+const API_BASE_URL = 'http://192.168.1.6:8000/api/v1'; // Backend API URL
 
 export default function Menu() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
