@@ -110,49 +110,15 @@ export default function Orders() {
     }
   };
 
-  // Function to play bell sound using Web Audio API
+  // Function to play bell sound
   const playBellSound = async () => {
     if (!audioEnabled) return; // Don't play if audio not enabled
 
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-
-      const context = audioContextRef.current;
-
-      // Ensure context is running
-      if (context.state === 'suspended') {
-        await context.resume();
-      }
-
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
-
-      // Bell-like sound: multiple frequencies
-      const frequencies = [800, 600, 400]; // Bell harmonics
-      let currentFreqIndex = 0;
-
-      const playNextFrequency = () => {
-        if (currentFreqIndex < frequencies.length) {
-          oscillator.frequency.setValueAtTime(frequencies[currentFreqIndex], context.currentTime);
-          gainNode.gain.setValueAtTime(0.3, context.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
-
-          setTimeout(() => {
-            currentFreqIndex++;
-            playNextFrequency();
-          }, 200);
-        } else {
-          oscillator.stop();
-        }
-      };
-
-      oscillator.start();
-      playNextFrequency();
+      // Simple beep sound using data URL
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmQcBzaO1fLNfCsE');
+      audio.volume = 0.5;
+      await audio.play();
 
       // Repeat every 2 seconds while bell is ringing
       if (bellRinging) {
@@ -161,14 +127,8 @@ export default function Orders() {
         }, 2000);
       }
     } catch (error) {
-      console.log('Web Audio API not supported, using fallback beep');
-      alert('Web Audio API failed, trying fallback...');
-      // Fallback: simple beep sound
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmQcBzaO1fLNfCsE');
-      audio.play().catch(() => {
-        console.log('Audio play failed');
-        alert('Audio playback failed. Check browser permissions.');
-      });
+      console.log('Audio play failed:', error);
+      alert('Bell sound failed to play. Check browser audio permissions.');
     }
   };
 
