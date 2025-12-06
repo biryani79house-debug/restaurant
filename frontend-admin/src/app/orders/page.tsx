@@ -77,9 +77,9 @@ export default function Orders() {
     setBellRinging(pendingIds.size > 0);
   }, []);
 
-  // Initialize audio context
-  useEffect(() => {
-    const initAudio = async () => {
+  const enableAudio = async () => {
+    try {
+      // Create audio context on user interaction
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
@@ -87,18 +87,21 @@ export default function Orders() {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-    };
-    initAudio();
-  }, []);
+      // Test the audio by playing a short beep
+      const context = audioContextRef.current;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
 
-  const enableAudio = async () => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+
+      oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
+      gainNode.gain.setValueAtTime(0.1, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.2);
+
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.2);
+
       setAudioEnabled(true);
       alert('Audio enabled! You will now hear bell sounds for new orders.');
     } catch (error) {
@@ -159,9 +162,13 @@ export default function Orders() {
       }
     } catch (error) {
       console.log('Web Audio API not supported, using fallback beep');
+      alert('Web Audio API failed, trying fallback...');
       // Fallback: simple beep sound
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmQcBzaO1fLNfCsE');
-      audio.play().catch(() => console.log('Audio play failed'));
+      audio.play().catch(() => {
+        console.log('Audio play failed');
+        alert('Audio playback failed. Check browser permissions.');
+      });
     }
   };
 
@@ -179,6 +186,7 @@ export default function Orders() {
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         console.log('Received message:', message);
+        alert(`Received ${message.type} message`);
 
         if (message.type === 'new_order') {
           // Add new order to the list
