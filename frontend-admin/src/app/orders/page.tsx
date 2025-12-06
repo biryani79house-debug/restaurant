@@ -25,6 +25,7 @@ export default function Orders() {
   const [bellRinging, setBellRinging] = useState(false);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -77,6 +78,22 @@ export default function Orders() {
     setBellRinging(pendingIds.size > 0);
   }, []);
 
+  // Load audio enabled state from localStorage after mount
+  useEffect(() => {
+    setMounted(true);
+    const stored = localStorage.getItem('audioEnabled');
+    if (stored === 'true') {
+      setAudioEnabled(true);
+    }
+  }, []);
+
+  // Save audio enabled state to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('audioEnabled', audioEnabled.toString());
+    }
+  }, [audioEnabled]);
+
   const enableAudio = async () => {
     try {
       // Create audio context on user interaction
@@ -87,20 +104,32 @@ export default function Orders() {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-      // Test the audio by playing a short beep
+      // Test the audio by playing the tring-tring pattern
       const context = audioContextRef.current;
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
+      const frequencies = [800, 600, 800, 600]; // Tring-tring pattern
+      let toneIndex = 0;
 
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
+      const playTestTone = () => {
+        if (toneIndex < frequencies.length) {
+          const oscillator = context.createOscillator();
+          const gainNode = context.createGain();
 
-      oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
-      gainNode.gain.setValueAtTime(0.1, context.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.2);
+          oscillator.connect(gainNode);
+          gainNode.connect(context.destination);
 
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.2);
+          oscillator.frequency.setValueAtTime(frequencies[toneIndex], context.currentTime);
+          gainNode.gain.setValueAtTime(1.0, context.currentTime); // Full volume
+          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+
+          oscillator.start();
+          oscillator.stop(context.currentTime + 0.3);
+
+          toneIndex++;
+          setTimeout(playTestTone, 150); // Short pause between tones
+        }
+      };
+
+      playTestTone();
 
       setAudioEnabled(true);
       alert('Audio enabled! You will now hear bell sounds for new orders.');
@@ -110,22 +139,54 @@ export default function Orders() {
     }
   };
 
-  // Function to play bell sound
+  // Function to play phone ring sound (tring tring)
   const playBellSound = async () => {
     if (!audioEnabled) return; // Don't play if audio not enabled
 
     try {
-      // Simple beep sound using data URL
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmQcBzaO1fLNfCsE');
-      audio.volume = 0.5;
-      await audio.play();
-
-      // Repeat every 2 seconds while bell is ringing
-      if (bellRinging) {
-        setTimeout(() => {
-          if (bellRinging) playBellSound();
-        }, 2000);
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
+
+      const context = audioContextRef.current;
+
+      // Ensure context is running
+      if (context.state === 'suspended') {
+        await context.resume();
+      }
+
+      // Create phone ring pattern: high-low-high-low
+      const frequencies = [800, 600, 800, 600]; // Tring-tring pattern
+      let toneIndex = 0;
+
+      const playTone = () => {
+        if (toneIndex < frequencies.length) {
+          const oscillator = context.createOscillator();
+          const gainNode = context.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(context.destination);
+
+          oscillator.frequency.setValueAtTime(frequencies[toneIndex], context.currentTime);
+          gainNode.gain.setValueAtTime(1.0, context.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+
+          oscillator.start();
+          oscillator.stop(context.currentTime + 0.3);
+
+          toneIndex++;
+          setTimeout(playTone, 150); // Short pause between tones
+        } else {
+          // Repeat the pattern every 2 seconds while bell is ringing
+          if (bellRinging) {
+            setTimeout(() => {
+              if (bellRinging) playBellSound();
+            }, 2000);
+          }
+        }
+      };
+
+      playTone();
     } catch (error) {
       console.log('Audio play failed:', error);
       alert('Bell sound failed to play. Check browser audio permissions.');
