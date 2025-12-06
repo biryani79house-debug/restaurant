@@ -126,48 +126,37 @@ export default function Home() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Mock data - in real app this would come from API
+  // Load real orders from API on mount
   useEffect(() => {
-    const mockOrders: Order[] = [
-      {
-        id: 'ORD001',
-        customerName: 'John Doe',
-        items: [
-          { name: 'Spring Rolls', price: 500, quantity: 2 },
-          { name: 'Grilled Salmon', price: 1500, quantity: 1 },
-        ],
-        total: 2500,
-        status: 'pending',
-        deliveryType: 'delivery',
-        createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'ORD002',
-        customerName: 'Jane Smith',
-        items: [
-          { name: 'Chocolate Cake', price: 400, quantity: 1 },
-          { name: 'Coffee', price: 150, quantity: 2 },
-        ],
-        total: 700,
-        status: 'accepted',
-        deliveryType: 'pickup',
-        createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        estimatedTime: 20,
-      },
-      {
-        id: 'ORD003',
-        customerName: 'Bob Wilson',
-        items: [
-          { name: 'Grilled Salmon', price: 1500, quantity: 1 },
-        ],
-        total: 1500,
-        status: 'preparing',
-        deliveryType: 'delivery',
-        createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-        estimatedTime: 15,
-      },
-    ];
-    setOrders(mockOrders);
+    const loadOrders = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/orders');
+        if (response.ok) {
+          const ordersData = await response.json();
+          const formattedOrders: Order[] = ordersData.map((order: any) => ({
+            id: order.id.toString(),
+            customerName: order.customer_name,
+            items: order.items.map((item: any) => ({
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+            })),
+            total: order.total_amount,
+            status: order.status,
+            deliveryType: order.delivery_type,
+            createdAt: order.created_at,
+            estimatedTime: order.estimated_time,
+          }));
+          setOrders(formattedOrders);
+        } else {
+          console.error('Failed to load orders, API returned:', response.status);
+        }
+      } catch (error) {
+        console.error('Failed to load orders:', error);
+      }
+    };
+
+    loadOrders();
   }, []);
 
   const acceptOrder = (orderId: string) => {
