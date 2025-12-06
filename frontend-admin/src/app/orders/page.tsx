@@ -24,6 +24,7 @@ export default function Orders() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'active'>('all');
   const [bellRinging, setBellRinging] = useState(false);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -76,14 +77,52 @@ export default function Orders() {
     setBellRinging(pendingIds.size > 0);
   }, []);
 
+  // Initialize audio context
+  useEffect(() => {
+    const initAudio = async () => {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      // Resume audio context (required by browsers)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    };
+    initAudio();
+  }, []);
+
+  const enableAudio = async () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      setAudioEnabled(true);
+      alert('Audio enabled! You will now hear bell sounds for new orders.');
+    } catch (error) {
+      console.log('Failed to enable audio:', error);
+      alert('Audio could not be enabled.');
+    }
+  };
+
   // Function to play bell sound using Web Audio API
-  const playBellSound = () => {
+  const playBellSound = async () => {
+    if (!audioEnabled) return; // Don't play if audio not enabled
+
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
 
       const context = audioContextRef.current;
+
+      // Ensure context is running
+      if (context.state === 'suspended') {
+        await context.resume();
+      }
+
       const oscillator = context.createOscillator();
       const gainNode = context.createGain();
 
@@ -327,7 +366,15 @@ export default function Orders() {
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {!audioEnabled && (
+              <button
+                onClick={enableAudio}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Enable Audio Alerts
+              </button>
+            )}
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
