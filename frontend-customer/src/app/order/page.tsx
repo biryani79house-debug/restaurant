@@ -1,43 +1,128 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface MenuItem {
+  id: number;
+  name: string;
+  price: number;
+  category: string;
+  description: string | null;
+  available: boolean;
+}
 
 interface CartItem {
+  id: number;
   name: string;
   price: number;
   quantity: number;
 }
 
-export default function Order() {
-  const [cart, setCart] = useState<CartItem[]>([]);
+const API_BASE_URL = 'http://192.168.1.6:8000/api/v1';
 
-  const addToCart = (item: { name: string; price: number }) => {
+export default function Order() {
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [customerInfo, setCustomerInfo] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    deliveryType: 'pickup' as 'pickup' | 'delivery',
+    address: ''
+  });
+
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/menu`);
+        if (response.ok) {
+          const data = await response.json();
+          setMenuItems(data);
+        } else {
+          console.error('Failed to fetch menu items');
+        }
+      } catch (error) {
+        console.error('Error fetching menu items:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMenuItems();
+  }, []);
+
+  const addToCart = (item: MenuItem) => {
     setCart(prev => {
-      const existing = prev.find(c => c.name === item.name);
+      const existing = prev.find(c => c.id === item.id);
       if (existing) {
-        return prev.map(c => c.name === item.name ? { ...c, quantity: c.quantity + 1 } : c);
+        return prev.map(c => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c);
       } else {
-        return [...prev, { ...item, quantity: 1 }];
+        return [...prev, { id: item.id, name: item.name, price: item.price, quantity: 1 }];
       }
     });
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const menuItems = [
-    { name: 'Spring Rolls', price: 500 },
-    { name: 'Grilled Salmon', price: 1500 },
-    { name: 'Chocolate Cake', price: 400 },
-    { name: 'Coffee', price: 150 },
-  ];
-
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       alert('Your cart is empty!');
       return;
     }
-    alert(`Order placed! Total: ₹${total}`);
-    setCart([]);
+
+    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+      alert('Please fill in your customer information!');
+      return;
+    }
+
+    if (customerInfo.deliveryType === 'delivery' && !customerInfo.address) {
+      alert('Please provide delivery address!');
+      return;
+    }
+
+    try {
+      const orderData = {
+        customer_name: customerInfo.name,
+        customer_email: customerInfo.email,
+        customer_phone: customerInfo.phone,
+        delivery_type: customerInfo.deliveryType,
+        delivery_address: customerInfo.deliveryType === 'delivery' ? customerInfo.address : '',
+        status: 'pending',
+        total_amount: total,
+        items: cart.map(item => ({
+          menu_item_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity
+        }))
+      };
+
+      const response = await fetch(`${API_BASE_URL}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      if (response.ok) {
+        alert('Order placed successfully!');
+        setCart([]);
+        setCustomerInfo({
+          name: '',
+          email: '',
+          phone: '',
+          deliveryType: 'pickup',
+          address: ''
+        });
+      } else {
+        alert('Failed to place order. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error placing order:', error);
+      alert('Failed to place order. Please try again.');
+    }
   };
 
   return (
@@ -76,15 +161,64 @@ export default function Order() {
               </div>
             )}
             <div className="mt-6">
+              <h3 className="text-xl font-semibold">Customer Information</h3>
+              <div className="mt-2 space-y-2">
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={customerInfo.name}
+                  onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full p-2 border rounded"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={customerInfo.email}
+                  onChange={(e) => setCustomerInfo(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full p-2 border rounded"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone Number"
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+            </div>
+            <div className="mt-6">
               <h3 className="text-xl font-semibold">Delivery Options</h3>
               <div className="mt-2">
                 <label className="mr-4">
-                  <input type="radio" name="delivery" value="pickup" className="mr-2" /> Pickup
+                  <input
+                    type="radio"
+                    name="delivery"
+                    value="pickup"
+                    checked={customerInfo.deliveryType === 'pickup'}
+                    onChange={(e) => setCustomerInfo(prev => ({ ...prev, deliveryType: e.target.value as 'pickup' }))}
+                    className="mr-2"
+                  /> Pickup
                 </label>
                 <label>
-                  <input type="radio" name="delivery" value="delivery" className="mr-2" /> Delivery
+                  <input
+                    type="radio"
+                    name="delivery"
+                    value="delivery"
+                    checked={customerInfo.deliveryType === 'delivery'}
+                    onChange={(e) => setCustomerInfo(prev => ({ ...prev, deliveryType: e.target.value as 'delivery' }))}
+                    className="mr-2"
+                  /> Delivery
                 </label>
               </div>
+              {customerInfo.deliveryType === 'delivery' && (
+                <textarea
+                  placeholder="Delivery Address"
+                  value={customerInfo.address}
+                  onChange={(e) => setCustomerInfo(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-full p-2 border rounded mt-2"
+                  rows={3}
+                />
+              )}
             </div>
             <button onClick={handleCheckout} className="mt-6 w-full bg-green-600 text-white py-2 rounded-full hover:bg-green-700">
               Proceed to Checkout

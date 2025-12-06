@@ -130,7 +130,7 @@ export default function Orders() {
   useEffect(() => {
     // Connect to WebSocket
     const connectWebSocket = () => {
-      const ws = new WebSocket('ws://localhost:8000/api/v1/ws/admin');
+      const ws = new WebSocket('ws://localhost:8000/ws/admin');
       wsRef.current = ws;
 
       ws.onopen = () => {

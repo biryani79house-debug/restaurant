@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
+from app.core.websocket import router as websocket_router
 
 app = FastAPI(
     title="Restaurant Management API",
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(websocket_router)
 
 if __name__ == "__main__":
     import uvicorn

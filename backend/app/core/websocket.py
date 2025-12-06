@@ -1,6 +1,8 @@
-from fastapi import WebSocket
+from fastapi import WebSocket, APIRouter
 from typing import List, Dict
 import json
+
+router = APIRouter()
 
 class ConnectionManager:
     def __init__(self):
@@ -47,6 +49,18 @@ class ConnectionManager:
             }
         }
         await self.broadcast_to_admins(message)
+
+@router.websocket("/ws/admin")
+async def admin_websocket(websocket: WebSocket):
+    await manager.connect(websocket, is_admin=True)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle incoming messages if needed
+    except Exception as e:
+        print(f"Admin websocket error: {e}")
+    finally:
+        manager.disconnect(websocket, is_admin=True)
 
 # Global connection manager instance
 manager = ConnectionManager()
