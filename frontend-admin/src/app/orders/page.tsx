@@ -28,6 +28,7 @@ export default function Orders() {
   const [mounted, setMounted] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const bellAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Mock data - in real app this would come from API
   useEffect(() => {
@@ -78,13 +79,9 @@ export default function Orders() {
     setBellRinging(pendingIds.size > 0);
   }, []);
 
-  // Load audio enabled state from localStorage after mount
+  // Set mounted after component mounts
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem('audioEnabled');
-    if (stored === 'true') {
-      setAudioEnabled(true);
-    }
   }, []);
 
   // Save audio enabled state to localStorage
@@ -104,6 +101,10 @@ export default function Orders() {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
+      // Create bell audio object for future use
+      bellAudioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      bellAudioRef.current.volume = 1.0;
+
       // Test the audio by playing the tring-tring pattern
       const context = audioContextRef.current;
       const frequencies = [800, 600, 800, 600]; // Tring-tring pattern
@@ -139,57 +140,40 @@ export default function Orders() {
     }
   };
 
-  // Function to play phone ring sound (tring tring)
+  // Function to play bell sound using pre-created Audio object
   const playBellSound = async () => {
-    if (!audioEnabled) return; // Don't play if audio not enabled
+    if (!audioEnabled || !bellAudioRef.current) return;
 
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      bellAudioRef.current.currentTime = 0; // Reset to beginning
+      await bellAudioRef.current.play();
+
+      console.log('Bell sound played');
+
+      // Repeat every 2 seconds while bell is ringing
+      if (bellRinging) {
+        setTimeout(() => {
+          if (bellRinging) playBellSound();
+        }, 2000);
       }
-
-      const context = audioContextRef.current;
-
-      // Ensure context is running
-      if (context.state === 'suspended') {
-        await context.resume();
-      }
-
-      // Create phone ring pattern: high-low-high-low
-      const frequencies = [800, 600, 800, 600]; // Tring-tring pattern
-      let toneIndex = 0;
-
-      const playTone = () => {
-        if (toneIndex < frequencies.length) {
-          const oscillator = context.createOscillator();
-          const gainNode = context.createGain();
-
-          oscillator.connect(gainNode);
-          gainNode.connect(context.destination);
-
-          oscillator.frequency.setValueAtTime(frequencies[toneIndex], context.currentTime);
-          gainNode.gain.setValueAtTime(1.0, context.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
-
-          oscillator.start();
-          oscillator.stop(context.currentTime + 0.3);
-
-          toneIndex++;
-          setTimeout(playTone, 150); // Short pause between tones
-        } else {
-          // Repeat the pattern every 2 seconds while bell is ringing
-          if (bellRinging) {
-            setTimeout(() => {
-              if (bellRinging) playBellSound();
-            }, 2000);
-          }
-        }
-      };
-
-      playTone();
     } catch (error) {
-      console.log('Audio play failed:', error);
-      alert('Bell sound failed to play. Check browser audio permissions.');
+      console.log('Bell sound failed:', error);
+      // Try creating a new audio object as fallback
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        audio.volume = 1.0;
+        await audio.play();
+        console.log('Fallback bell sound played');
+      } catch (altError) {
+        console.log('Fallback bell sound also failed:', altError);
+        // Last resort: browser notification
+        if ('Notification' in window) {
+          new Notification('New Order!', {
+            body: 'A new order has arrived!',
+            icon: '/favicon.ico'
+          });
+        }
+      }
     }
   };
 
